@@ -1,0 +1,45 @@
+pipeline {
+    agent any
+    parameters {
+    	string(name: 'RELEASE', defaultValue: '20220331-1830', description: 'application release version')
+    }
+    environment { 
+	VERSION="20220331-1830" 
+    }
+    stages {
+        stage('准备阶段') {
+            steps {
+                echo "workspace: ${WORKSPACE}"
+                echo "build_tag: ${BUILD_TAG}"
+                echo "node_name: ${NODE_NAME}"
+                echo "version:   ${VERSION}"
+		echo "build_number: ${env.BUILD_NUMBER}"
+            }
+        }
+        stage('拉取代码') {
+            steps {
+                echo "get code from git"
+                git branch: 'main', credentialsId: 'deba9002-ed35-4021-a11a-c58b2bb7878e', url: 'git@10.0.0.252:gp-cloud-native/front-web-pj01.git'
+            }
+        }
+        stage('构建镜像'){
+            steps {
+                //sh 'cd ${WORKSPACE}/front-web-pj01/'
+                sh 'docker  -H tcp://10.0.0.251:2375  build -t harbor.xsc.org/pub-images/nginx-front-web:${VERSION} .'
+                sh 'docker  -H tcp://10.0.0.251:2375  push harbor.xsc.org/pub-images/nginx-front-web:${VERSION}'
+		echo "${params.RELEASE}"
+            }
+        }
+        stage('部署应用'){
+            steps {
+		sh label:'deploy image to k8s', script: '/bin/bash deploy.sh'
+            }
+        }
+   }
+	post {
+        always {
+            echo 'One way or another, I have finished'
+            deleteDir() /* clean up our workspace */
+        }
+    }
+}
